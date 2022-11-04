@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"> <title>Rules of the Game</title>
+</head>
+<body style="font-family:sans-serif; font-size:18px; width:800px; margin-left:auto; margin-right:auto;">
+<h1 style="font-size:24px; text-align:center;"> Rules of the Game</h1>
+
+<p>Use methods of scientific observation to try and determine the rules of this game.</p>
+<div>
+	<center><input type="button" value="New Game" onclick="refreshPage();" style="font-size : 26px;"> <input type="button" value="Next Move" onclick="newTurn();" style="font-size : 26px;"></center>
+</div>
+
+<hr>
+
+
+<div style="width:600px; height:600px; margin-left:auto; margin-right:auto;" style="position:relative;">
+<!--	<img src="rulesofgame.png" width="600" height="600" style="position:absolute; left: 100; top: 600; z-index: 0">-->
+	<canvas id="gameBoard" width="600" height="600" style="position:absolute; left: 100; top: 600; z-index: 1;"> Canvas not supported; please update your browser.</canvas>
+	<canvas id="pieceBoard" width="600" height="600" style="position:absolute; left: 100; top: 600; z-index: 2;"> Canvas not supported; please update your browser.</canvas>
+	<canvas id="finishBoard" width="600" height="600" style="position:absolute; left: 100; top: 600; z-index: 3;"> Canvas not supported; please update your browser.</canvas>
+</div>
+
+
+<script>
+var gameBoard = document.getElementById("gameBoard"); 
+var gctx = gameBoard.getContext("2d"); 
+
+var side = 100;
+var blok = 30;
+var turn = 0;
+
+var gameIsDone = 0;
+
+drawGameBoard();
+// draw game board
+function drawGameBoard() {
+	for (let i = 0; i < 6; i++) { 
+		for (let j = 0; j < 6; j++) {
+			xL = i*side;
+			yL = j*side;
+			if (!(i == 0) && !(j == 5) && !(j == 0 && i > 3) && !(i == 5 && j < 2)) {
+  				gctx.beginPath();
+  				gctx.lineWidth = "2";
+				gctx.strokeStyle = "black";
+				gctx.rect(xL, yL, side, side);
+				if (j==0 || i == 5) {
+					gctx.fillStyle = "#E0E0E0";
+					gctx.fill();
+				}
+				gctx.stroke();
+			}
+			if (i == 0 && ((j > 0) && (j < 4))) {
+				// draw the 3 triangles
+				gctx.beginPath();
+				gctx.lineWidth = "2";
+				gctx.strokeStyle = "black";
+				gctx.fillStyle = "#E0E0E0";
+				gctx.moveTo((i+1)*side,j*side);
+				gctx.lineTo(i*side,(j+0.5)*side);
+				gctx.lineTo((i+1)*side,(j+1)*side);
+				gctx.fill();
+				gctx.stroke();
+			}
+			if (j == 5 && ((i > 1) && (i < 5))) {
+				// draw the 3 triangles
+				gctx.beginPath();
+				gctx.lineWidth = "2";
+				gctx.strokeStyle = "black";
+				gctx.fillStyle = "#E0E0E0";
+				gctx.moveTo(i*side,j*side);
+				gctx.lineTo((i+0.5)*side,(j+1)*side);
+				gctx.lineTo((i+1)*side,j*side);
+				gctx.lineTo(i*side,j*side);
+				gctx.fill();
+				gctx.stroke();
+			}
+		}
+	}
+}
+
+var pieceBoard = document.getElementById("pieceBoard"); 
+var pctx = pieceBoard.getContext("2d"); 
+
+// randomly select the first player 0 = blue, 1 = orange
+var firstPlayer = Math.floor(Math.random() * 2);
+
+
+var	d1 = [];
+	d1[0] = [9, 9, 9];
+	d1[1] = [9, 9, 9];
+	d1[2] = [9, 9, 9];
+
+var	d2 = [];
+	d2[0] = [9, 9, 9];
+	d2[1] = [9, 9, 9];
+	d2[2] = [9, 9, 9];
+
+// player 1 pieces initial spots
+var p1 = [];
+	p1[0] = [1, 2, 3];	// x-locations
+	p1[1] = [0, 0, 0];	// y-locations
+	
+// player 1 win condition
+var p1win = [0, 0, 0]
+	
+// player 2 pieces initial spots
+var p2 = [];
+	p2[0] = [5, 5, 5];	// x-locations
+	p2[1] = [2, 3, 4];	// y-locations
+	
+// player 2 win condition
+var p2win = [0, 0, 0]
+
+var fullTriangles = [];
+	fullTriangles[0] = [0, 0, 0];	// blue player triangles
+	fullTriangles[1] = [0, 0, 0];	// orange player triangles
+
+// array of forbidden locations
+var forBid = [];
+	forBid[0] = [0, 0, 1]; // x-coords
+	forBid[1] = [4, 5, 5]; // y-coords
+
+
+// blue triangles: 0 - left, 1 - center, 2 - right
+var blueTriangles = [];
+	blueTriangles[0] = [2, 3, 4];	// x-locations
+	blueTriangles[1] = [5, 5, 5];	// y-locations
+
+// orange triangles: 0 - top, 1 - center, 3 - bottom
+var orangeTriangles = [];
+	orangeTriangles[0] = [0, 0, 0];	// x-locations
+	orangeTriangles[1] = [1, 2, 3];	// y-locations
+
+
+// calculate distances to each triangle for each piece
+calculateDistances();
+	
+placePieces();
+function placePieces() {
+	pctx.clearRect(0, 0, pieceBoard.width, pieceBoard.height);
+	for (let i = 0; i < 3; i++) {
+		// place blue pieces
+		pctx.beginPath();
+		pctx.fillStyle = "blue";
+		pctx.rect(p1[0][i]*side+(side/2)-(blok/2),p1[1][i]*side+(side/2)-(blok/2),blok,blok);
+		pctx.fill();
+		
+		// place orange pieces
+		pctx.beginPath();
+		pctx.fillStyle = "orange";
+		pctx.rect(p2[0][i]*side+(side/2)-(blok/2),p2[1][i]*side+(side/2)-(blok/2),blok,blok);
+		pctx.fill();	
+	}
+}
+
+function calculateDistances() {
+	for (let i = 0; i < 3; i++) {		// piece number
+		for (let k = 0; k < 3; k++) {	// triangle number
+			// calculate distances for blue pieces
+			if (d1[i][k] != 99) d1[i][k] = Math.sqrt((p1[0][i]-blueTriangles[0][k])**2 + (p1[1][i]-blueTriangles[1][k])**2);
+			// calculate distances for orange pieces
+			if (d2[i][k] != 99) d2[i][k] = Math.sqrt((p2[0][i]-orangeTriangles[0][k])**2 + (p2[1][i]-orangeTriangles[1][k])**2);
+		}
+	}
+}
+
+function calcDistanceSum(player, piece) {
+	var distanceSum = 0;
+	for (let k = 0; k < 3; k++) {	// triangle number
+		if (!player) {
+			// calculate distances for blue pieces
+			distanceSum += Math.sqrt((p1[0][piece]-blueTriangles[0][k])**2 + (p1[1][piece]-blueTriangles[1][k])**2);
+		}
+		else {
+			// calculate distances for orange pieces
+			distanceSum += Math.sqrt((p2[0][piece]-orangeTriangles[0][k])**2 + (p2[1][piece]-orangeTriangles[1][k])**2);
+		}
+	}
+	return distanceSum;
+}
+
+function refreshPage() {
+	window.location.reload();
+}
+
+function newTurn() {
+	calculateDistances();
+	if (!gameIsDone) {
+		if ((!firstPlayer && !(turn % 2)) || (firstPlayer && (turn %2))) {	// blue player moves		
+			var pieceHasMoved = 0;
+			var stuckArray = [0, 0, 0];
+			var pieceToMove = Math.floor(Math.random() * 3);
+			while (!pieceHasMoved && (!stuckArray[0] || !stuckArray[1] || !stuckArray[2])) {
+				var tries = 0;	// how many attempts has this made for a piece to move
+		
+				var pieceIsSelected = 0;
+				while (!pieceIsSelected) {
+					pieceToMove = (pieceToMove + 1) % 3;
+
+					// check that the piece is not in the end position
+					var isEnd = checkEnd(0, pieceToMove);
+					// check that the piece is not blocked on all sides
+					var isBlocked = checkBlocked(0, pieceToMove);
+			
+					if (!isEnd && !isBlocked) {
+						pieceIsSelected = 1;
+					}
+					else {
+						stuckArray[pieceToMove] = 1;
+					}
+				}
+		
+				// choose a random move direction
+				var moveDirection = Math.floor(Math.random() * 3);
+				while (!pieceHasMoved && tries < 3) {
+					var coordsToMove = directionCoordinates(moveDirection);			
+					var newXCoords = p1[0][pieceToMove] + coordsToMove[0];
+					var newYCoords = p1[1][pieceToMove] + coordsToMove[1];
+						
+					// check that piece will not move to a forbidden square
+					var isForbidden = checkForbidden(0, newXCoords, newYCoords);
+					// check that piece will not move to an occupied square
+					var isOccupied = checkOccupancy(newXCoords, newYCoords);		
+					// check that the distance will decrease
+					var willDecrease = checkWillDecrease(0, pieceToMove, newXCoords, newYCoords);
+			
+					// if both of those conditions are satisfied, move the piece, re-draw the pieces, make pieceHasMoved = 1
+					if (!isOccupied && willDecrease && !isForbidden) {
+						// move the piece
+						p1[0][pieceToMove] = newXCoords;
+						p1[1][pieceToMove] = newYCoords;
+				
+						// re-draw the pieces
+						placePieces();
+				
+						// make pieceHasMoved = 1
+						pieceHasMoved = 1;
+					}
+					else {
+						tries++; // increment stuck index
+					}
+					if (tries == 3)	stuckArray[pieceToMove] = 1;
+				
+					moveDirection = (moveDirection + 1) % 3;
+				}
+			}
+			
+			if (stuckArray[0] && stuckArray[1] && stuckArray[2] && !pieceHasMoved) {
+				var blockedStatus = [0, 0, 0]; // let's assume each piece is not blocked
+				var distanceSumsBlue = [];
+					distanceSumsBlue[0] = [99, 99, 99, 99]; // piece 0
+					distanceSumsBlue[1] = [99, 99, 99, 99]; // piece 1
+					distanceSumsBlue[2] = [99, 99, 99, 99]; // piece 2
+				// go through each of the pieces
+				for (let i = 0; i < 3; i ++) {
+					// calculate the current sum distance for this piece
+					var currentDistanceSum = calcDistanceSum(0, i);
+
+					// if the piece is already at the end, there is no reason to do this
+					var isEnd = checkEnd(0, i);
+					if (!isEnd) {	
+						// go through every move and see if it is not blocked & if so, what the sum of triangle distances would be
+						// 0: right, 1: left, 2: up, 3: down
+						for (let k = 0; k < 4; k++) {
+							var newDistanceSum = checkDistanceSums(0, i, k);
+							distanceSumsBlue[i][k] = newDistanceSum - currentDistanceSum;
+						}
+					}
+				}
+				
+				var bestPieceMove = [999, 999, 999, 9999];
+				var bestIndexMove = [999, 999, 999, 9999];
+				for (let i = 0; i < 3; i++) {
+					// find the smallest value in distanceSumsBlue[piece][move]
+					bestPieceMove[i] = Math.min(...distanceSumsBlue[i]);
+					// find idnex of this value
+					bestIndexMove[i] = distanceSumsBlue[i].indexOf(bestPieceMove[i]);
+				}
+				
+				var minimumDistance = Math.min(...bestPieceMove);
+				var bestPiece = bestPieceMove.indexOf(minimumDistance);
+				var bestMove = bestIndexMove[bestPiece];
+
+				// find new coordinates for that move
+				var coordsToMove = directionCoordinates(bestMove);			
+				var newXCoords = p1[0][bestPiece] + coordsToMove[0];
+				var newYCoords = p1[1][bestPiece] + coordsToMove[1];
+				
+				// move the piece
+				p1[0][bestPiece] = newXCoords;
+				p1[1][bestPiece] = newYCoords;
+				
+				// re-draw the pieces
+				placePieces();
+			}
+		}
+		else {			// orange player moves		
+			var pieceHasMoved = 0;
+			var stuckArray = [0, 0, 0];
+			var pieceToMove = Math.floor(Math.random() * 3);
+			while (!pieceHasMoved && (!stuckArray[0] || !stuckArray[1] || !stuckArray[2])) {
+				var tries = 0;	// how many attempts has this made for a piece to move
+		
+				
+				var pieceIsSelected = 0;
+				while (!pieceIsSelected) {
+					pieceToMove = (pieceToMove + 1) % 3;
+
+					// check that the piece is not in the end position
+					var isEnd = checkEnd(1, pieceToMove);
+					// check that the piece is not blocked on all sides
+					var isBlocked = checkBlocked(1, pieceToMove);
+								
+					if (!isEnd && !isBlocked) {
+						pieceIsSelected = 1;
+					}
+					else {
+						stuckArray[pieceToMove] = 1;
+					}
+				}
+
+				// choose a random move direction
+				var moveDirection = Math.floor(Math.random() * 3) + 1;
+				while (!pieceHasMoved && tries < 3) {
+					var coordsToMove = directionCoordinates(moveDirection);			
+					var newXCoords = p2[0][pieceToMove] + coordsToMove[0];
+					var newYCoords = p2[1][pieceToMove] + coordsToMove[1];
+						
+					// check that piece will not move to a forbidden square
+					var isForbidden = checkForbidden(1, newXCoords, newYCoords);
+					// check that piece will not move to an occupied square
+					var isOccupied = checkOccupancy(newXCoords, newYCoords);		
+					// check that the distance will decrease
+					var willDecrease = checkWillDecrease(1, pieceToMove, newXCoords, newYCoords);
+			
+					// if both of those conditions are satisfied, move the piece, re-draw the pieces, make pieceHasMoved = 1
+					if (!isOccupied && willDecrease && !isForbidden) {
+						// move the piece
+						p2[0][pieceToMove] = newXCoords;
+						p2[1][pieceToMove] = newYCoords;
+				
+						// re-draw the pieces
+						placePieces();
+				
+						// make pieceHasMoved = 1
+						pieceHasMoved = 1;
+					}
+					else {
+						tries++; // increment stuck index
+					}
+					if (tries == 3)	stuckArray[pieceToMove] = 1;
+				
+					moveDirection = ((moveDirection + 1) % 3) + 1;
+				}
+			}
+			
+			// while loop has been exited
+			if (stuckArray[0] && stuckArray[1] && stuckArray[2] && !pieceHasMoved) {
+				var blockedStatus = [0, 0, 0]; // let's assume each piece is not blocked
+				var distanceSumsOrange = [];
+					distanceSumsOrange[0] = [99, 99, 99, 99]; // piece 0
+					distanceSumsOrange[1] = [99, 99, 99, 99]; // piece 1
+					distanceSumsOrange[2] = [99, 99, 99, 99]; // piece 2
+				// go through each of the pieces
+				for (let i = 0; i < 3; i ++) {
+					// calculate the current sum distance for this piece
+					var currentDistanceSum = calcDistanceSum(1, i);
+					
+					// if the piece is already at the end, there is no reason to do this
+					var isEnd = checkEnd(1, i);
+					if (!isEnd) {	
+						// go through every move and see if it is not blocked & if so, what the sum of triangle distances would be
+						// 0: right, 1: left, 2: up, 3: down
+						for (let k = 0; k < 4; k++) {
+							var newDistanceSum = checkDistanceSums(1, i, k);
+							distanceSumsOrange[i][k] = newDistanceSum - currentDistanceSum;
+						}
+					}
+				}
+			
+				var bestPieceMove = [999, 999, 999, 9999];
+				var bestIndexMove = [999, 999, 999, 9999];
+				for (let i = 0; i < 3; i++) {
+					// find the smallest value in distanceSumsOrange[piece][move]
+					bestPieceMove[i] = Math.min(...distanceSumsOrange[i]);
+					// find idnex of this value
+					bestIndexMove[i] = distanceSumsOrange[i].indexOf(bestPieceMove[i]);
+				}
+				
+				var minimumDistance = Math.min(...bestPieceMove);
+				var bestPiece = bestPieceMove.indexOf(minimumDistance);
+				var bestMove = bestIndexMove[bestPiece];
+				
+				// find new coordinates for that move
+				var coordsToMove = directionCoordinates(bestMove);			
+				var newXCoords = p2[0][bestPiece] + coordsToMove[0];
+				var newYCoords = p2[1][bestPiece] + coordsToMove[1];
+				
+				// move the piece
+				p2[0][bestPiece] = newXCoords;
+				p2[1][bestPiece] = newYCoords;
+				
+				// re-draw the pieces
+				placePieces();
+			}
+
+		}
+	
+		// update distances of all pieces
+		calculateDistances();
+	
+		// increment the turn number
+		turn++;
+	}
+
+	// check win
+	checkWin();
+	var blueWin = p1win[0] + p1win[1] + p1win[2];
+	var orangeWin = p2win[0] + p2win[1] + p2win[2];
+		if (blueWin == 3) {
+			gameIsDone = 1;
+			drawFinishYay(0);
+			return;
+		}
+		if (orangeWin == 3) {
+			gameIsDone = 1;
+			drawFinishYay(1);
+			return;
+		}
+}
+
+function checkDistanceSums(player, piece, move) {
+	var coords = directionCoordinates(move);
+	var newXPosition = 0;
+	var newYPosition = 0;
+	var sumDistance = 0;
+
+	if (!player) {
+		newXPosition = p1[0][piece] + coords[0];
+		newYPosition = p1[1][piece] + coords[1];
+	}
+	else {
+		newXPosition = p2[0][piece] + coords[0];
+		newYPosition = p2[1][piece] + coords[1];
+	}
+	var isForbidden = checkForbidden(player, newXPosition, newYPosition);
+		
+	var isBlocked = 0;
+	for (let i = 0; i < 3; i++) {
+		if ((p1[0][i] == newXPosition) && (p1[1][i] == newYPosition))	isBlocked = 1;
+		if ((p2[0][i] == newXPosition) && (p2[1][i] == newYPosition))	isBlocked = 1;
+	}
+		
+	// if position is forbidden or blocked, the distance sum should be 99
+	if (isForbidden || isBlocked) {
+		sumDistance = 99;
+	}
+	else {
+		for (let i = 0; i < 3; i++) {
+			if (!player)	sumDistance += Math.sqrt((newXPosition-blueTriangles[0][i])**2 + (newYPosition-blueTriangles[1][i])**2);
+			else			sumDistance += Math.sqrt((newXPosition-orangeTriangles[0][i])**2 + (newYPosition-orangeTriangles[1][i])**2);
+		}
+	}
+	
+	// if orange & upper triangle is full & motion is up(3)
+	if (player && fullTriangles[1][0] && (move == 3)) sumDistance = 88;
+	// if orange & lower triangle is full & motion is down(2)
+	if (player && fullTriangles[1][2] && (move == 2)) sumDistance = 88;
+	// if blue & left triangle is full & motion is left(1)
+	if (!player && fullTriangles[0][0] && (move == 1)) sumDistance = 88;
+	// if blue & right triangle is full & motion is right(0)
+	if (!player && fullTriangles[0][2] && !move)	   sumDistance = 88;
+	
+	return sumDistance;
+}
+
+function directionCoordinates(moveDir) {
+	var coords = [0,0]
+	switch (moveDir) {
+		case 0:
+			coords = [1,0];
+			break;
+		case 1:
+			coords = [-1,0];
+			break;
+		case 2:
+			coords = [0,1];
+			break;
+		case 3:
+			coords = [0,-1];
+			break;
+		default:
+			console.log("invalid move direction");
+	}
+	
+	return coords;
+}
+
+function checkWin() {
+	for (let i = 0; i < 3; i++) {
+		// check blue pieces for a win condition
+		if (!d1[i][0] || !d1[i][1] || !d1[i][2]) {	// if any of blue piece i's distances is equal to zero...
+			p1win[i] = 1;							// blue piece i is in a triangle!
+			var whichBlueTriangle = d1[i].indexOf(0);	// this tells me which triangle the piece is in
+			fullTriangles[0][whichBlueTriangle] = 1;	// set full triangle index to 1 for this player
+			
+			// set distances for other blue pieces to 99 for this particular triangle
+			for (let k = 0; k < 3; k++) {
+				if (k != i) d1[k][whichBlueTriangle] = 99;
+			}
+		}
+		// check orange pieces for a win condition
+		if (!d2[i][0] || !d2[i][1] || !d2[i][2]) {	// if any of orange piece i's distances is equal to zero...
+			p2win[i] = 1;							// orange piece i is in a triangle!
+			var whichOrangeTriangle = d2[i].indexOf(0);	// this tells me which triangle the piece is in
+			fullTriangles[1][whichOrangeTriangle] = 1;	// set full triangle index to 1 for this player
+			
+			// set distances for other orange pieces to 99 for this particular triangle
+			for (let k = 0; k < 3; k++) {
+				if (k != i) d2[k][whichOrangeTriangle] = 99;
+			}
+		}
+	}
+}
+
+
+function checkOccupancy(x, y) {
+	var isOccupied = 0;	// let's assume the spot we're moving to is unoccupied
+	for (let i = 0; i < 3; i++) {
+		if (p1[0][i] == x && p1[1][i] == y)	isOccupied = 1;
+		if (p2[0][i] == x && p2[1][i] == y)	isOccupied = 1;
+	}
+	return isOccupied;
+}
+
+function checkForbidden(player, x, y) {
+	var isForbidden = 0;	// let's assume the spot we're moving to is allowed
+	for (let i = 0; i < forBid[0].length; i++) {
+		if (x == forBid[0][i] && y == forBid[1][i]) isForbidden = 1;
+	}
+	// no piece can move INTO a blue holding cell
+	if (y == 0) isForbidden = 1;
+	// no piece can move INTO an orange holding cell
+	if (x == 5) isForbidden = 1;
+	
+	if (!player) {	// blue cannot move into orange's triangles
+		if (x == 0) isForbidden = 1;
+	}
+	else {			// orange cannot move into blue's triangles
+		if (y == 5) isForbidden = 1;
+	}
+	return isForbidden;
+}
+
+function checkWillDecrease(player, piece, x, y) {
+	var willDecrease = 0; // let's assume the spot we're moving to won't decrease the distance to the finish
+	if (!player) { // check for blue player
+		// check current minimum distance for the active piece
+		var currentMinDistance = Math.min(...d1[piece]);
+		var indexWithinArray = d1[piece].indexOf(currentMinDistance);
+		
+		var newDistance = 99;
+		newDistance = Math.sqrt((x-blueTriangles[0][indexWithinArray])**2 + (y-blueTriangles[1][indexWithinArray])**2);
+		if (newDistance < currentMinDistance) willDecrease = 1;
+	}
+	else {	// check for orange player
+		// check current minimum distance for the active piece
+		var currentMinDistance = Math.min(...d2[piece]);
+		var indexWithinArray = d2[piece].indexOf(currentMinDistance);
+
+		var newDistance = 99;
+		newDistance = Math.sqrt((x-orangeTriangles[0][indexWithinArray])**2 + (y-orangeTriangles[1][indexWithinArray])**2);
+		if (newDistance < currentMinDistance) willDecrease = 1;
+	}
+	return willDecrease;
+}
+
+
+
+
+
+function checkEnd(player, piece) {
+	var isAtEnd = 0; // let's assume the piece is not at the end of the board
+	if (!player) {	// check the blue player's piece
+		var pieceX = p1[0][piece];
+		var pieceY = p1[1][piece];
+		if (((pieceX == 2) || (pieceX == 3) || (pieceX == 4)) && pieceY == 5)	isAtEnd = 1;
+	}
+	else {			// check the orange player's piece
+		var pieceX = p2[0][piece];
+		var pieceY = p2[1][piece];
+		if (((pieceY == 1) || (pieceY == 2) || (pieceY == 3)) && pieceX == 0)	isAtEnd = 1;
+	}
+	return isAtEnd;
+}
+
+function checkBlocked(player, piece) {
+	var isBlocked = 0; // let's assume the piece is not blocked
+	if (!player) {	// check the blue player's piece
+		var blockIndex = 0;
+		
+		var pieceX = p1[0][piece];
+		var pieceY = p1[1][piece];
+		
+		if (pieceY == 0) {	// piece is still in "holding cell" and can be blocked on one side!
+			for (let i = 0; i < 3; i++) {
+				if (p2[0][i] == pieceX && p2[1][i] == 1)	blockIndex += 3;
+				if (p1[0][i] == pieceX && p1[1][i] == 1)	blockIndex += 3;
+			}
+		
+		}
+		
+		var moveLeft = [pieceX-1, pieceY];
+		var moveDown = [pieceX, pieceY+1];
+		var moveRight = [pieceX+1, pieceY];
+		
+		// check against all of orange's pieces
+		for (let i = 0; i < 3; i++) {
+			if ((p2[0][i] == moveLeft[0]) && (p2[1][i] == moveLeft[1]))		blockIndex++;
+			if ((p2[0][i] == moveDown[0]) && (p2[1][i] == moveDown[1]))		blockIndex++;
+			if ((p2[0][i] == moveRight[0]) && (p2[1][i] == moveRight[1]))	blockIndex++;
+		}
+		// check against all of blue's pieces
+		for (let i = 0; i < 3; i++) {
+			if ((p1[0][i] == moveLeft[0]) && (p1[1][i] == moveLeft[1]))		blockIndex++;
+			if ((p1[0][i] == moveDown[0]) && (p1[1][i] == moveDown[1]))		blockIndex++;
+			if ((p1[0][i] == moveRight[0]) && (p1[1][i] == moveRight[1]))	blockIndex++;
+		}
+		
+		if (blockIndex >= 3) isBlocked = 1;
+	}
+	else {			// check the orange player's piece
+		var blockIndex = 0;
+		
+		var pieceX = p2[0][piece];
+		var pieceY = p2[1][piece];
+
+		var moveLeft = [pieceX-1, pieceY];
+		var moveUp = [pieceX, pieceY-1];
+		var moveDown = [pieceX, pieceY+1];
+
+		// check against all of orange's pieces
+		for (let i = 0; i < 3; i++) {
+			if ((p2[0][i] == moveLeft[0]) && (p2[1][i] == moveLeft[1]))		blockIndex++;
+			if ((p2[0][i] == moveDown[0]) && (p2[1][i] == moveDown[1]))		blockIndex++;
+			if ((p2[0][i] == moveUp[0]) && (p2[1][i] == moveUp[1]))			blockIndex++;
+		}
+		// check against all of blue's pieces
+		for (let i = 0; i < 3; i++) {
+			if ((p1[0][i] == moveLeft[0]) && (p1[1][i] == moveLeft[1]))		blockIndex++;
+			if ((p1[0][i] == moveDown[0]) && (p1[1][i] == moveDown[1]))		blockIndex++;
+			if ((p1[0][i] == moveUp[0]) && (p1[1][i] == moveUp[1]))			blockIndex++;
+		}
+
+		if (blockIndex >= 3) isBlocked = 1;
+	}
+	return isBlocked;
+}
+
+var finishBoard = document.getElementById("finishBoard"); 
+var fctx = finishBoard.getContext("2d"); 
+
+function drawFinishYay(winner) {
+	fctx.beginPath();
+	fctx.fillStyle = "black";
+	fctx.rect(100,200,400,200);
+	fctx.fill();
+	
+	var theName = "nobody";
+	if (!winner) theName = "blue";
+	else theName = "orange";
+	
+	fctx.font = "36px sans-serif";
+	fctx.fillStyle = "white";
+	fctx.textAlign = "center";
+	fctx.fillText(theName+" wins!", 300, 300);
+}
+
+
+
+
+
+
+</script>
+
+<hr>
+<a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png" /></a><br /><span xmlns:dct="http://purl.org/dc/terms/" href="http://purl.org/dc/dcmitype/InteractiveResource" property="dct:title" rel="dct:type">Rules of the Game</span> by <a xmlns:cc="http://creativecommons.org/ns#" href="https://doctor-pasquale.com/simulationsphysics/" property="cc:attributionName" rel="cc:attributionURL">Alyssa J. Pasquale, Ph.D.</a> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
+
+</body>
+</html>
